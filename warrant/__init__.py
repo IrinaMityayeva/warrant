@@ -366,18 +366,22 @@ class Cognito(object):
             AuthParameters=auth_params,
         )
 
-        msa_enabled = False
         if response['ChallengeName'] == self.SMS_MFA_CHALLENGE:
-            msa_enabled = True
-            return msa_enabled
+            mfa_resp = {
+                'mfa_enabled': True,
+                'session': response['Session']
+            }
         else:
             self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
             self.refresh_token = response['AuthenticationResult']['RefreshToken']
             self.verify_token(response['AuthenticationResult']['AccessToken'], 'access_token', 'access')
             self.token_type = response['AuthenticationResult']['TokenType']
-            return msa_enabled
+            mfa_resp = {
+                'mfa_enabled': False,
+            }
+        return mfa_resp
 
-    def sms_mfa(self, auth_code, username=None):
+    def sms_mfa(self, auth_code, session, username=None):
         if not username:
             username = self.username
         challenge_response_params = {
@@ -387,7 +391,8 @@ class Cognito(object):
         response = self.client.respond_to_auth_challenge(
             ClientId=self.client_id,
             ChallengeName='SMS_MFA',
-            ChallengeResponses=challenge_response_params
+            ChallengeResponses=challenge_response_params,
+            Session=session
         )
         self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
         self.refresh_token = response['AuthenticationResult']['RefreshToken']
