@@ -132,6 +132,7 @@ class Cognito(object):
 
     user_class = UserObj
     group_class = GroupObj
+    SMS_MFA_CHALLENGE = 'SMS_MFA'
 
     def __init__(
             self, user_pool_id, client_id,user_pool_region=None,
@@ -357,7 +358,7 @@ class Cognito(object):
                 'PASSWORD': password
             }
         self._add_secret_hash(auth_params, 'SECRET_HASH')
-        tokens = self.client.admin_initiate_auth(
+        response = self.client.admin_initiate_auth(
             UserPoolId=self.user_pool_id,
             ClientId=self.client_id,
             # AuthFlow='USER_SRP_AUTH'|'REFRESH_TOKEN_AUTH'|'REFRESH_TOKEN'|'CUSTOM_AUTH'|'ADMIN_NO_SRP_AUTH',
@@ -365,10 +366,33 @@ class Cognito(object):
             AuthParameters=auth_params,
         )
 
-        self.verify_token(tokens['AuthenticationResult']['IdToken'], 'id_token','id')
-        self.refresh_token = tokens['AuthenticationResult']['RefreshToken']
-        self.verify_token(tokens['AuthenticationResult']['AccessToken'], 'access_token','access')
-        self.token_type = tokens['AuthenticationResult']['TokenType']
+        msa_enabled = False
+        if response['ChallengeName'] == self.SMS_MFA_CHALLENGE:
+            msa_enabled = True
+            return msa_enabled
+        else:
+            self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
+            self.refresh_token = response['AuthenticationResult']['RefreshToken']
+            self.verify_token(response['AuthenticationResult']['AccessToken'], 'access_token', 'access')
+            self.token_type = response['AuthenticationResult']['TokenType']
+            return msa_enabled
+
+    def sms_mfa(self, auth_code, username=None):
+        if not username:
+            username = self.username
+        challenge_response_params = {
+            'USERNAME': username,
+            'SMS_MFA_CODE': auth_code
+        }
+        response = self.client.respond_to_auth_challenge(
+            ClientId=self.client_id,
+            ChallengeName='SMS_MFA',
+            ChallengeResponses=challenge_response_params
+        )
+        self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
+        self.refresh_token = response['AuthenticationResult']['RefreshToken']
+        self.verify_token(response['AuthenticationResult']['AccessToken'], 'access_token', 'access')
+        self.token_type = response['AuthenticationResult']['TokenType']
 
     def authenticate(self, password):
         """
