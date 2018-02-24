@@ -367,7 +367,7 @@ class Cognito(object):
             AuthParameters=auth_params,
         )
 
-        if response['ChallengeName'] and response['ChallengeName'] in [self.SMS_MFA_CHALLENGE, self.SOFTWARE_TOKEN_MFA_CHALLENGE]:
+        if 'ChallengeName' in response and response['ChallengeName'] in [self.SMS_MFA_CHALLENGE, self.SOFTWARE_TOKEN_MFA_CHALLENGE]:
             mfa_resp = {
                 'mfa_enabled': True,
                 'session': response['Session'],
