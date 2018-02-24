@@ -133,6 +133,7 @@ class Cognito(object):
     user_class = UserObj
     group_class = GroupObj
     SMS_MFA_CHALLENGE = 'SMS_MFA'
+    SOFTWARE_TOKEN_MFA_CHALLENGE = 'SOFTWARE_TOKEN_MFA'
 
     def __init__(
             self, user_pool_id, client_id,user_pool_region=None,
@@ -366,10 +367,11 @@ class Cognito(object):
             AuthParameters=auth_params,
         )
 
-        if response['ChallengeName'] == self.SMS_MFA_CHALLENGE:
+        if response['ChallengeName'] in [self.SMS_MFA_CHALLENGE, self.SOFTWARE_TOKEN_MFA_CHALLENGE]:
             mfa_resp = {
                 'mfa_enabled': True,
-                'session': response['Session']
+                'session': response['Session'],
+                'challenge_name': response['ChallengeName']
             }
         else:
             self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
@@ -381,17 +383,23 @@ class Cognito(object):
             }
         return mfa_resp
 
-    def sms_mfa(self, auth_code, session, username=None):
+    def mfa(self, auth_code, session, challenge_name, username=None):
         if not username:
             username = self.username
         challenge_response_params = {
-            'USERNAME': username,
-            'SMS_MFA_CODE': auth_code
+            'SMS_MFA': {
+                'USERNAME': username,
+                'SMS_MFA_CODE': auth_code
+            },
+            'SOFTWARE_TOKEN_MFA': {
+                'USERNAME': username,
+                'SOFTWARE_TOKEN_MFA_CODE': auth_code
+            }
         }
         response = self.client.respond_to_auth_challenge(
             ClientId=self.client_id,
-            ChallengeName='SMS_MFA',
-            ChallengeResponses=challenge_response_params,
+            ChallengeName=challenge_name,
+            ChallengeResponses=challenge_response_params[challenge_name],
             Session=session
         )
         self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
