@@ -134,6 +134,7 @@ class Cognito(object):
     group_class = GroupObj
     SMS_MFA_CHALLENGE = 'SMS_MFA'
     SOFTWARE_TOKEN_MFA_CHALLENGE = 'SOFTWARE_TOKEN_MFA'
+    NEW_PASSWORD_REQUIRED_CHALLENGE = 'NEW_PASSWORD_REQUIRED'
 
     def __init__(
             self, user_pool_id, client_id,user_pool_region=None,
@@ -367,23 +368,30 @@ class Cognito(object):
             AuthParameters=auth_params,
         )
 
-        if 'ChallengeName' in response and response['ChallengeName'] in [self.SMS_MFA_CHALLENGE, self.SOFTWARE_TOKEN_MFA_CHALLENGE]:
-            mfa_resp = {
-                'mfa_enabled': True,
-                'session': response['Session'],
-                'challenge_name': response['ChallengeName']
-            }
+        if 'ChallengeName' in response:
+            if response['ChallengeName'] in [self.SMS_MFA_CHALLENGE, self.SOFTWARE_TOKEN_MFA_CHALLENGE]:
+                auth_resp = {
+                    'mfa_enabled': True,
+                    'session': response['Session'],
+                    'challenge_name': response['ChallengeName']
+                }
+            elif response['ChallengeName'] == self.NEW_PASSWORD_REQUIRED_CHALLENGE:
+                auth_resp = {
+                    'mfa_enabled': False,
+                    'session': response['Session'],
+                    'challenge_name': response['ChallengeName']
+                }
         else:
             self.verify_token(response['AuthenticationResult']['IdToken'], 'id_token', 'id')
             self.refresh_token = response['AuthenticationResult']['RefreshToken']
             self.verify_token(response['AuthenticationResult']['AccessToken'], 'access_token', 'access')
             self.token_type = response['AuthenticationResult']['TokenType']
-            mfa_resp = {
+            auth_resp = {
                 'mfa_enabled': False,
             }
-        return mfa_resp
+        return auth_resp
 
-    def mfa(self, auth_code, session, challenge_name, username=None):
+    def auth_challenge(self, auth_code, session, challenge_name, username=None):
         if not username:
             username = self.username
         challenge_response_params = {
@@ -394,6 +402,10 @@ class Cognito(object):
             'SOFTWARE_TOKEN_MFA': {
                 'USERNAME': username,
                 'SOFTWARE_TOKEN_MFA_CODE': auth_code
+            },
+            'NEW_PASSWORD_REQUIRED': {
+                'USERNAME': username,
+                'NEW_PASSWORD': auth_code
             }
         }
         response = self.client.respond_to_auth_challenge(
