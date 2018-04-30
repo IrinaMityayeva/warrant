@@ -622,8 +622,8 @@ class Cognito(object):
             'Username': self.username
         }
         self._add_secret_hash(params, 'SecretHash')
-        self.client.forgot_password(**params)
-
+        response = self.client.forgot_password(**params)
+        return response
 
     def delete_user(self):
 
